@@ -1,8 +1,82 @@
-package EROOT;
+package Class::Eroot;
 require 5.002;
+
+use strict;
+
+use Carp qw(cluck confess);
+
+our $VERSION = sprintf '%s', 'q$Revision: 2.1 $' =~ /\S+\s+(\S+)\s+/ ;
 
 #
 # Eternal Root: an exercise in object persistence.
+# Nov 26 2001 - Terrence Brannon
+# numerous changes to get Class::Eroot to work with Class::Struct instead of
+# Class::Template. Here's the diff:
+#  4,5d3
+#  < our $VERSION = sprintf '%s', 'q$Revision: 2.1 $' =~ /\S+\s+(\S+)\s+/ ;
+#  < 
+#  145c143
+#  < #@ISA=qw(Class::Eroot::Persister);
+#  ---
+#  > @ISA=qw(Class::Eroot::Persister);
+#  147c145
+#  < use Class::Struct;
+#  ---
+#  > use Class::Template;
+#  156c154
+#  < 	sub Class::Eroot::Continue { 1; }
+#  ---
+#  > 	sub Class::Eroot::Persister::Continue { 1; }
+#  170,171c168
+#  < #	members Class::Eroot { @Class::Eroot::MEMBERS };
+#  < 	struct (Class::Eroot => { @Class::Eroot::MEMBERS });
+#  ---
+#  > 	members Class::Eroot { @Class::Eroot::MEMBERS };
+#  178,181c175
+#  < #	my $self = InitMembers();
+#  < 	my $self = Class::Eroot->new;
+#  < 
+#  < 	warn "Name: $args{Name}";
+#  ---
+#  > 	my $self = InitMembers();
+#  187d180
+#  < 	warn "fname set to ", $self->fname, " in self = $self";
+#  189,190c182
+#  < 	$self;
+#  < #	bless $self, $type;
+#  ---
+#  > 	bless $self, $type;
+#  196,198d187
+#  < 	warn "destroy self = $self and fname = ", $self->fname;
+#  < 	use Data::Dumper;
+#  < 	warn "calling self->Store with self = ", Dumper($self);
+#  218d206
+#  < 	  warn "storing $i $ref under $name";
+#  225d212
+#  < 	warn "after Keep, self = ", Dumper($self);
+#  312c299
+#  < 	my $name = $self->fname;
+#  ---
+#  > 	my $name = $self->{'fname'};
+#  315,318c302,305
+#  < 	my @objs = @{$self->refs};
+#  < 	my $roots = $self->xrefs;
+#  < 	my $id2name = $self->id2name;
+#  < 	my $key = $self->key;
+#  ---
+#  > 	my @objs = @{$self->{'refs'}};
+#  > 	my $roots = $self->{'xrefs'};
+#  > 	my $id2name = $self->{'id2name'};
+#  > 	my $key = $self->{'key'};
+#  322,323d308
+#  < 	warn "objs @objs";
+#  < 
+#  404c389
+#  < 	print $fh "    if( \$self->key ne \'$key\' );\n";
+#  ---
+#  > 	print $fh "    if( \$self->{\'key\'} ne \'$key\' );\n";
+
+
 #   3jun96
 #   Dean Roehrich
 #
@@ -13,14 +87,14 @@ require 5.002;
 #  - updated for changes in 5.001 strictures.
 # changes/bugs fixed since 21nov94 version:
 #  - Updated manpage.
-#  - Moved Persister::Continue to EROOT::Persister::Continue.
+#  - Moved Persister::Continue to Class::Eroot::Persister::Continue.
 #  - Changed some error messages.
 #  - new() blesses into $type, is inheritable.
 #  - No longer requires root objects to be blessed.
 #  - Misc. nit changes.
 #  - Now using strictures.
 # changes/bugs fixed since 31oct94 version:
-#  - Moved to Class::Eroot.  Package is still EROOT.
+#  - Moved to Class::Eroot.  Package is still Class::Eroot.
 #  - Using Class::Template.pm (was Class.pm).
 # changes/bugs fixed since 20feb94 version:
 #  - Changed SLEEP/WAKEUP to suspend/resume.
@@ -32,14 +106,14 @@ require 5.002;
 #  - Bug in WriteStack prevented first object on stack from getting a resume.
 #  - Replaced local() with my().
 #  - Resume can now bless to a lowercase class name without causing warnings.
-#  - Flattened EROOT::private class, it prevented reusability.
+#  - Flattened Class::Eroot::private class, it prevented reusability.
 #  - Continue now uses dynamic dispatch for Resume.
 #  - Updated manpage and examples.
 #  - Now using dynamic dispatch everywhere; eases reusability.
 
 =head1 NAME
 
-Eroot - an eternal root to handle persistent objects
+Class::Eroot - an eternal root to handle persistent objects
 
 =head1 ABSTRACT
 
@@ -54,7 +128,8 @@ is sent to the eroot.
 
 	require Class::Eroot;
 	my $some_obj;
-	my $eroot = new EROOT ( 'Name' => "persist.file",
+# NOTE THERE IS *NO* new method to be called. This is important
+	my $eroot = Class::Eroot->cache ( 'Name' => "persist.file",
 				  'Key'  => "myAppObjects" );
 
 	if( $eroot->Continue ){
@@ -134,29 +209,39 @@ This is not an OODBMS.
 
 =head1 FILES
 
-	Class::Eroot.pm	- Eternal Root class.
+	Class/Eroot.pm	- Eternal Root class.
 	persist.file	- User-defined file where objects are stored.
-	Class::Template.pm	- Struct/member template builder.
+	Class/Struct.pm	- Struct/member template builder. Comes with Perl.
+
+=head1 AUTHOR
+
+Dean Roehrich was the original author of both Class::Eroot and also of
+an object/method convenience class that was called Class::Template but is now
+standard with Perl under the name Class::Struct.
+
+Class::Struct was cleaned up by a number of people.
+
+This was cleaned up by me, Terrence Brannon.
 
 =cut
 
-@ISA=qw(EROOT::Persister);
+#@ISA=qw(Class::Eroot::Persister);
 use Carp;
-use Class::Template;
+use Class::Struct;
 
 use strict;
 no strict 'refs';
 
 Var: {
 
-	# Stub.  WriteStack will create method EROOT::Continue
+	# Stub.  WriteStack will create method Class::Eroot::Continue
 	# to override this.
-	sub EROOT::Persister::Continue { 1; }
+	sub Class::Eroot::Continue { 1; }
 	
-	$EROOT::DumpStack = 0;
-	$EROOT::WriteStack = 1;
+	$Class::Eroot::DumpStack = 0;
+	$Class::Eroot::WriteStack = 1;
 
-	@EROOT::MEMBERS = (
+	@Class::Eroot::MEMBERS = (
 		'refs'		=> '@',  # objects
 		'xrefs'		=> '%',  # indices into refs
 		'xnames'	=> '%',  # indices into xrefs
@@ -165,26 +250,35 @@ Var: {
 		'key'		=> '$',
 		);
 
-	members EROOT { @EROOT::MEMBERS };
+#	members Class::Eroot { @Class::Eroot::MEMBERS };
+	struct ('Class::Eroot' => { @Class::Eroot::MEMBERS });
 }
 
 
 # Parameters:  Name, Key
-sub new {
+sub cache {
 	my( $type, %args ) = @_;
-	my $self = InitMembers();
+#	my $self = InitMembers();
+	my $self = Class::Eroot->new;
+
+#	warn "Name: $args{Name}";
 
 	$self->fname( $args{'Name'} ) ||
 		croak "Need name of file for persistent objects";
 	$self->key( $args{'Key'} ) ||
 		croak "Need key for persistent objects";
+	#warn "fname set to ", $self->fname, " in self = $self";
 	require $args{'Name'} if( -e $args{'Name'} );
-	bless $self, $type;
+	$self;
+#	bless $self, $type;
 }
 
 
 DESTROY {
 	my $self = shift;
+	#warn "destroy self = $self and fname = ", $self->fname;
+	use Data::Dumper;
+	#warn "calling self->Store with self = ", Dumper($self);
 
 	$self->Store;
 }
@@ -197,19 +291,21 @@ sub Keep {
 	my $id;
 
 	if( @_ != 2 ){
-		croak "usage - EROOT::Keep( self, name, ref )";
+		croak "usage - Class::Eroot::Keep( self, name, ref )";
 		return;
 	}
 	if( ! ref $ref ){
 		carp "Not an object";
 	}
 	else{
+	  #warn "storing $i $ref under $name";
 		$self->refs( $i, $ref );
 		($id) = "$ref" =~ /\((0x[a-f0-9]+)\)$/o;
 		$self->xrefs( $id, $i );
 		$self->xnames( $name, $id );
 		$self->id2name( $id, $name );
 	}
+#	warn "after Keep, self = ", Dumper($self);
 }
 
 
@@ -257,20 +353,20 @@ sub Root {
 
 
 sub List {
-	my $self = shift;
-	my @keys = keys %{$self->xrefs};
-	my( $id, $i );
+  my $self = shift;
+  my @keys = keys %{$self->xrefs};
+  my($id, $i);
 
-	while( @keys ){
-		$id = shift @keys;
-		$i = $self->xrefs( $id );
-		print $self->id2name($id)," is ",$self->refs($i),"\n";
-	}
+  while (@keys) {
+    $id = shift @keys;
+    $i = $self->xrefs( $id );
+    print $self->id2name($id)," is ",$self->refs($i),"\n";
+  }
 }
 
 
 #
-# Private routines for the EROOT.  These actually do the store/restore
+# Private routines for the Class::Eroot.  These actually do the store/restore
 # of the objects.
 #
 
@@ -296,15 +392,17 @@ sub Resume {
 ## private
 sub Store {
 	my $self = shift;
-	my $name = $self->{'fname'};
+	my $name = $self->fname;
 	my( $n, $obj, @k );
 	my @s = ();
-	my @objs = @{$self->{'refs'}};
-	my $roots = $self->{'xrefs'};
-	my $id2name = $self->{'id2name'};
-	my $key = $self->{'key'};
+	my @objs = @{$self->refs};
+	my $roots = $self->xrefs;
+	my $id2name = $self->id2name;
+	my $key = $self->key;
 	my( $class, $type, $ident );
 	my %id = ();
+
+	#warn "objs @objs";
 
 	while( @objs ){
 		$obj = shift @objs;
@@ -349,13 +447,13 @@ sub Store {
 			warn "Eroot: Unable to recognize object $obj";
 		}
 	}
-	$self->DumpStack( \@s )			if $EROOT::DumpStack;
-	$self->WriteStack( $key, $name, \@s )	if $EROOT::WriteStack;
+	$self->DumpStack( \@s )			if $Class::Eroot::DumpStack;
+	$self->WriteStack( $key, $name, \@s )	if $Class::Eroot::WriteStack;
 }
 
 
 # Turn the stack into perl code.
-# This will create a method named Continue in the EROOT class.
+# This will create a method named Continue in the Class::Eroot class.
 # This assumes that keys and values for the "objects" can be safely
 # represented as text within single quotes.
 #
@@ -377,16 +475,16 @@ sub WriteStack {
 	my @delayed = ();
 
 	open( $fh, ">$name" ) || do{
-		warn "Eroot: Cannot save objects, unable to write to file $name";
+		cluck  "Eroot: Cannot save objects, unable to write to file $name";
 		return;
 	};
 	print $fh "#KEY:$key\n";
 	print $fh "# Persistent objects\n";
-	print $fh "sub EROOT::Continue {\n";
+	print $fh "sub Class::Eroot::Continue {\n";
 	print $fh "  my \$self = shift;\n";
 	print $fh "  my \%ref = ();\n";
 	print $fh "  die \"These persistent objects (key=$key) do not belong to this application.\\n\"\n";
-	print $fh "    if( \$self->{\'key\'} ne \'$key\' );\n";
+	print $fh "    if( \$self->key ne \'$key\' );\n";
 	while( $i-- > 0 ){
 		($junk, $word, $ident, $stuff) =
 			split( /^(\w+) ([^\s]+) ?/o, $s->[$i], 2 );
@@ -525,3 +623,4 @@ sub DumpStack {
 	}
 }
 1;
+

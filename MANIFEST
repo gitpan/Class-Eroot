@@ -1,0 +1,7 @@
+Changes
+Eroot.pm
+Makefile.PL
+MANIFEST
+t/simple.t
+t/simple2.t
+t/simple2a.t
